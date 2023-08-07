@@ -1,0 +1,102 @@
+logic [12:0] cache_memory [4] = '{13'h0, 13'h0, 13'h0, 13'h0};
+ int plru_lock;
+ int plru_max;
+ int load_location; 
+ int plru_state[4] = '{0, 0, 0, 0};
+ int input_equal;
+ int plru_equal_location;
+ int i;
+ int static_ittration = 0;
+ 
+ 
+ function void apply_plru_algo_on_cache(bit [12:0]io);
+ 
+
+ bit [11:0] address_load;
+ address_load = io;
+ 
+ `uvm_info(get_type_name(),$psprintf("UTLB Cache itteration:| %d |",static_ittration ),UVM_NONE)
+ `uvm_info(get_type_name(),$psprintf("Calculating cache location and loading for Data :| %h |", address_load),UVM_NONE)
+ 
+ // Display PLRU
+ `uvm_info(get_type_name(),$psprintf("UTLB Cache Print while starting the PLRU Calculation :| %h | %h | %h | %h |", cache_memory[3],cache_memory[2], cache_memory[1], cache_memory[0]),UVM_NONE)
+ `uvm_info(get_type_name(),$psprintf("UTLB PLRU state Print Before Zeros Foreach:| %d | %d | %d | %d |", plru_state[3],plru_state[2],plru_state[1],plru_state[0]),UVM_NONE)
+ 
+ // PLRU_state will only work when we have some free locations first four transactions
+ if(static_ittration < 4) begin
+    for(int j = 0; j < 4; j++) begin
+        if(plru_state[j] == 0) begin
+            if (j == 0) begin
+                //this will be during first cycle
+                plru_state[j] = 1; 
+            end
+            else begin
+                plru_state[j] = plru_state[j-1] + 1;
+            end
+            break;
+        end 
+    end
+ end
+ `uvm_info(get_type_name(),$psprintf("UTLB PLRU state Print after Zeros Foreach:| %d | %d | %d | %d |", plru_state[3],plru_state[2],plru_state[1],plru_state[0]),UVM_NONE)  
+ // Update the plru_state when we have already filled the cache , so no zeros in status
+ // every status location will correspond to the time of arrival , for example if the status is 4 he(the location) arrived the latest
+ // If the status value is 1 he arrived the least latest  
+ // here i update the state of every location when the cache is filled 
+                 //if (plru_state[k] <= plru_lock ) 
+                 //   continue;  
+ 
+ //Here we calcumate if the input is equal and update the input equal variable
+ if(static_ittration >= 4) begin
+       for (int o = 0; o < 4; o++) begin
+             if (cache_memory[o] == address_load)
+                 input_equal = 1;
+                 plru_equal_location = o;
+                 plru_lock = plru_state[o];
+       end
+ end      
+ 
+ 
+ //If we found the discriptor in the cache already then we update that location plru_state to 4 and and the othe number which are greated than that to Number - 1                   
+ if(static_ittration >= 4) begin 
+    if  (input_equal == 1) begin   
+        for (int y = 0; y < 4; y++) begin   
+            if (plru_state[y] > plru_lock && (y != plru_equal_location)) begin
+                plru_state[y] = plru_state[y] - 1;
+            end
+            plru_state[plru_equal_location] = 4;
+        end
+   end
+   else begin //else we make the state 1 to 4 and all the other states to number-1 , signifing the least accassed discriptor should be relaced and given recently accessed
+        for (int z = 0; z < 4; z++) begin
+            if(plru_state[z] == 1)
+                plru_state[z] = 4;
+            else
+                plru_state[z] = plru_state[z] - 1;
+        end
+    end     
+ end
+ 
+ `uvm_info(get_type_name(),$psprintf("UTLB PLRU state Print after filled foreach:| %d | %d | %d | %d |", plru_state[3],plru_state[2],plru_state[1],plru_state[0]),UVM_NONE)
+ //Cache update with the help of plru_state
+
+ //Here we calculate the max value in the state array , Where ever this is ax value we have to store the latest data coming inn 
+ plru_max = plru_state[0];
+ 
+ for(int m = 1; m < 4; m++) begin
+    if (plru_state[m] > plru_max) 
+          plru_max = plru_state[m];
+    end
+`uvm_info(get_type_name(),$psprintf("UTLB PLRU state max value after calculation is :| %d |", plru_max),UVM_NONE)
+
+// Storing the incoming data in the array 
+ for(int k = 0; k < 4; k++) begin
+    if (plru_state[k] == plru_max) 
+        cache_memory[k] = address_load;
+ end
+    
+  `uvm_info(get_type_name(),$psprintf("UTLB Cache Print after the PLRU Calculation:| %h | %h | %h | %h |", cache_memory[3],cache_memory[2], cache_memory[1], cache_memory[0]),UVM_NONE)  
+  static_ittration = static_ittration + 1;
+  //Reset input equal for next transction
+  input_equal = 0;
+           
+ endfunction
